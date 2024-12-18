@@ -1,37 +1,27 @@
 import random
 import csv
+import pandas as pd
 
 class DecktionaryBattle:
     def __init__(self):
         self.deck = self.create_deck()
         self.revealed_cards = []
-        self.player1_score = 0
-        self.player2_score = 0
-        self.debug = False
-        self.game_log = []
+        self.player_score = 0
+        self.bot_score = 0
+        self.game_log = pd.DataFrame(columns=[
+            'Game', 'Round', 'Player Hand', 'Bot Hand', 'Player Card', 'Bot Card', 
+            'Winner', 'Player Score', 'Bot Score'
+        ])
         self.game_number = 1
-        self.playing_against_bot = False
+        self.playing_against_bot = True
         self.bot_difficulty = None
 
-    def choose_opponent(self):
-        # This is to choose to play against another human locally or against the computer
-        print("Choose your opponent:")
-        print("1. Human")
-        print("2. CPU")
-        while True:
-            choice = input("Enter 1 for Human or 2 for CPU: ").strip()
-            if choice == '1':
-                self.playing_against_bot = False
-                print("You chose to play against a human!")
-                return
-            elif choice == '2':
-                self.playing_against_bot = True
-                self.choose_bot_difficulty()
-                print("You the difficulty:")
-                print(f"{self.bot_difficulty}")
-                return
-            else:
-                print("Invalid choice. Please Try again.")
+    def create_deck(self):
+        suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
+        ranks = list(range(2,15)) # 2 to Ace (Ace = 14)
+        deck = [(rank, suit) for suit in suits for rank in ranks if rank != 13] # Removes the kings
+        random.shuffle(deck)
+        return deck
 
     def choose_bot_difficulty(self):
         # Chooses difficulty (Currently only easy or expert)
@@ -43,94 +33,20 @@ class DecktionaryBattle:
             difficulty = input("Enter 1 for Easy or 2 for Expert: ").strip()
             if difficulty == '1':
                 self.bot_difficulty = "easy"
+                print("You chose Easy difficulty!")
                 return
             elif difficulty == '2':
                 self.bot_difficulty = "expert"
+                print("You chose Expert difficulty!")
                 return
             else:
                 print("Invalid choice. Please try again.")
-
-    def create_deck(self):
-        suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
-        ranks = list(range(2,15)) # 2 to Ace (Ace = 14)
-        deck = [(rank, suit) for suit in suits for rank in ranks if rank != 13] # This removes the kings
-        random.shuffle(deck)
-        return deck
     
-    def log_event(self, round_num, player1_card, player2_card, winner):
-        #Logs the details of the round to then be saved to a .csv file
-        self.game_log.append({
-            'Game': self.game_number,
-            'Round': round_num,
-            'Player 1 Hand': self.player1_hand.copy(),
-            'Player 2 Hand': self.player2_hand.copy(),
-            'Player 1 Card': player1_card,
-            'Player 2 Card': player2_card,
-            'Winner': f"Player {winner}",
-            'Player 1 Score': self.player1_score,
-            'Player 2 Score': self.player2_score
-        })
-
-    def save_log_to_csv(self, filename="game_log.csv"):
-        with open(filename, 'a', newline='') as csvfile:  # Open in append mode
-            fieldnames = [
-                'Game', 
-                'Round', 
-                'Player 1 Hand', 
-                'Player 2 Hand', 
-                'Player 1 Card', 
-                'Player 2 Card', 
-                'Winner', 
-                'Player 1 Score', 
-                'Player 2 Score'
-            ]
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-            # Write header only if the file is empty
-            if csvfile.tell() == 0:
-                writer.writeheader()
-
-            # Add the game number to each log entry and write to the CSV
-            for log in self.game_log:
-                for field in fieldnames:
-                    log.setdefault(field, '')
-                log['Game'] = self.game_number  # Include game number
-                writer.writerow(log)
-
-            # Add a blank row to separate games
-            writer.writerow({})
-
-        self.game_number += 1
-
-    def log_final_scores(self):
-    # Logs the final scores and game summary.
-        self.game_log.append({
-            'Game': self.game_number,
-            'Round': 'Final',
-            'Player 1 Hand': self.player1_hand.copy(),
-            'Player 2 Hand': self.player2_hand.copy(),
-            'Player 1 Card': '',
-            'Player 2 Card': '',
-            'Winner': 'Game Over',
-            'Player 1 Score': self.player1_score,
-            'Player 2 Score': self.player2_score
-    })
-
     def deal_cards(self):
-        self.player1_hand = [self.deck.pop() for _ in range(8)]
-        self.player2_hand = [self.deck.pop() for _ in range(8)]
-        if self.debug:
-            print("Player 1 Hand:")
-            print(self.render_cards(self.player1_hand))
-            print("Player 2 Hand:")
-            print(self.render_cards(self.player2_hand))
-        
-        self.game_log.append({
-            'Round': 'Deal',
-            'Player 1 Hand': self.player1_hand,
-            'Player 2 Hand': self.player2_hand,
-            'Winner': 'N/A'
-        })
+        self.player_hand = [self.deck.pop() for _ in range(8)]
+        self.bot_hand = [self.deck.pop() for _ in range(8)]
+        print("Your Hand:")
+        print(self.render_cards(self.player_hand))
 
     def render_cards(self, cards):
         # This is going to change the cards from (#, *Suit*) to display a text based image of a card to look nicer when playing
@@ -155,38 +71,71 @@ class DecktionaryBattle:
         card_lines.append("└─────┘  " * len(cards))
 
         return "\n".join(card_lines)
+
+    def log_event(self, round_num, player_card, bot_card, winner):
+        # Events logged using Pandas
+        self.game_log = pd.concat([self.game_log, pd.DataFrame([{
+            'Game': self.game_number,
+            'Round': round_num,
+            'Player Hand': str(self.player_hand),
+            'Bot Hand': str(self.bot_hand),
+            'Player Card': player_card,
+            'Bot Card': bot_card,
+            'Winner': f"Player {winner}",
+            'Player Score': self.player_score,
+            'Bot Score': self.bot_score
+        }])], ignore_index=True)
+
+    def save_log_to_csv(self, filename="game_log.csv"):
+        # Saves Data frame to CSV file
+        self.game_log.to_csv(filename, index=False, mode='a', header=not pd.io.common.file_exists(filename))
+        self.game_number += 1
+
+    def log_final_scores(self):
+        # Logs the final scores and game summary to Data Frame
+        self.game_log = pd.concat([self.game_log, pd.DataFrame([{
+            'Game': self.game_number,
+            'Round': 'Final',
+            'Player Hand': str(self.player_hand),
+            'Bot Hand': str(self.bot_hand),
+            'Player Card': '',
+            'Bot Card': '',
+            'Winner': 'Game Over',
+            'Player Score': self.player_score,
+            'Bot Score': self.bot_score
+        }])], ignore_index=True)
     
     def lead_round(self, leader, follower):
         if leader == 1:
-            player1_card = self.choose_card(self.player1_hand, 1)
-            player2_card = self.choose_card(self.player2_hand, 2)
+            player_card = self.choose_card(self.player_hand, 1)
+            bot_card = self.choose_card(self.bot_hand, 2)
         else:
-            player2_card = self.choose_card(self.player2_hand, 2)
-            player1_card = self.choose_card(self.player1_hand, 1)
+            bot_card = self.choose_card(self.bot_hand, 2)
+            player_card = self.choose_card(self.player_hand, 1)
         
         # Determines the lead suit
-        self.lead_suit = player1_card[1] if leader == 1 else player2_card[1]
-        print("Player 1 plays:")
-        print(self.render_cards(player1_card))
-        print("Player 2 plays:")
-        print(self.render_cards(player2_card))
+        self.lead_suit = player_card[1] if leader == 1 else bot_card[1]
+        print("Player plays:")
+        print(self.render_cards(player_card))
+        print("Bot plays:")
+        print(self.render_cards(bot_card))
         print(f"Lead suit: {self.lead_suit}")
         
         # Initilization of the winner variable
         winner = None
 
         # Follow Suit Rule Check: Checks to see if anyone did not follow the suit
-        if follower == 2 and player2_card[1] != self.lead_suit and any(card[1] == self.lead_suit for card in self.player2_hand):
-            print("Player 2 broke the rules by not following suit!")
-            winner = 1 # Player 1 automatically wins
-        elif follower == 1 and player1_card[1] != self.lead_suit and any(card[1] == self.lead_suit for card in self.player1_hand):
-            print("Player 1 broke the rules by not following suit!")
-            winner = 2 # Player 2 automatically wins
+        if follower == 2 and bot_card[1] != self.lead_suit and any(card[1] == self.lead_suit for card in self.bot_hand):
+            print("Bot broke the rules by not following suit!")
+            winner = 1 # Player automatically wins
+        elif follower == 1 and player_card[1] != self.lead_suit and any(card[1] == self.lead_suit for card in self.player_hand):
+            print("Player broke the rules by not following suit!")
+            winner = 2 # Bot automatically wins
             
         if winner is None:   
             # Determines the winner normally if no rules have been broken
-            if (player2_card[1] == self.lead_suit and leader == 1) or (player1_card[1] == self.lead_suit and leader == 2):
-                winner = 1 if player1_card[0] > player2_card[0] else 2
+            if (bot_card[1] == self.lead_suit and leader == 1) or (player_card[1] == self.lead_suit and leader == 2):
+                winner = 1 if player_card[0] > bot_card[0] else 2
                 print(f"Both players followed the suit. Winner: Player {winner}")
             else:
                 winner = leader
@@ -194,11 +143,11 @@ class DecktionaryBattle:
         
         # Updates the scores
         if winner == 1:
-            self.player1_score += 1
-            print("Player 1 wins this round!")
+            self.player_score += 1
+            print("Player wins this round!")
         else:
-            self.player2_score += 1
-            print("Player 2 wins this round!")
+            self.bot_score += 1
+            print("Bot wins this round!")
         
         # Reveals the next card from the deck
         revealed_card = self.deck.pop()
@@ -206,41 +155,23 @@ class DecktionaryBattle:
         print("Revealed Card:")
         print(self.render_cards(revealed_card))
         
-        return player1_card, player2_card, winner
+        return player_card, bot_card, winner
     
     def get_lead_suit(self):
         """Returns the lead suit for the current round"""
         return self.lead_suit
 
-    def choose_card(self, player_hand, player_num):
-        
-        # This allows players or the cpu to choose a card from their hand with controls for privacy
-        if self.playing_against_bot and player_num == 2:
-            return self.bot_choose_card(player_hand)
-        
-        # Human player options
-        hidden = not self.playing_against_bot # Privacy is disabled against bots (Bot cant read the screen)
+    def player_choose_card(self):
+        print("Your hand:")
+        print(self.render_cards(self.player_hand))
         while True:
-            if hidden:
-                print(f"Player {player_num}'s hand is hidden. Type 'show' (s) to display it.")
-            else:
-                print(f"Player {player_num}'s turn. Your hand:")
-                print(self.render_cards(player_hand))
-        
-            choice = input(f"Player {player_num}, choose an action (show/s, hide/h, or pick a card): ").lower()
-
-            if choice in ['show', 's'] and not self.playing_against_bot:
-                hidden = False
-            elif choice in ['hide', 'h'] and not self.playing_against_bot:
-                hidden = True
-            elif choice.isdigit() and not hidden:
-                card_idx = int(choice)
-                if 0 <= card_idx < len(player_hand):
-                    return player_hand.pop(card_idx)
-                else:
-                    print("Invalid card index. Please try again.")
-            else:
-                print("Invalid input. Please try again.")
+            try:
+                choice = int(input("Choose a card index (0-7): "))
+                if 0 <= choice < len(self.player_hand):
+                    return self.player_hand.pop(choice)
+                print("Invalid choice. Try again.")
+            except ValueError:
+                print("Enter a valid number.")
 
     def bot_choose_card(self, bot_hand):
         """Logic for the bot to choose a card base on the difficulty."""
@@ -251,8 +182,8 @@ class DecktionaryBattle:
             return self.bot_expert_choice(bot_hand)
 
     def bot_easy_choice(self, bot_hand):
-        random.shuffle(bot_hand) # This will shuffle the bots hand to add randomness to the pick
-        return bot_hand.pop() # Picks a random card from the hand
+        # Logic for easy bot (picks random card)
+        return bot_hand.pop(random.randint(0, len(bot_hand) - 1)) 
     
     def bot_expert_choice(self, bot_hand):
         if self.lead_suit is None:
@@ -272,7 +203,7 @@ class DecktionaryBattle:
         print("""
         1. The game uses a standard deck of playing cards with Kings removed (48 cards).
         2. Each player starts with 8 cards in their hand.
-        3. Player 1 always leads the first round.
+        3. Player always leads the first round.
         4. The player who leads sets the suit for the round (the lead suit).
         5. The other player must follow the lead suit if possible.
         6. If the player cannot follow the lead suit, they may play any card.
@@ -291,60 +222,37 @@ class DecktionaryBattle:
         - Have fun and strategize to win!       
         """)
     
-    def get_game_length(self):
-        # Prompts user to choose the length of the game.
-        print("Choose game length:")
-        print("short (s) - Play one hand (8 rounds)")
-        print("long (l) - Play the entire deck (Default)")
-        while True:
-            choice = input("Enter your choice (short/s or long/l}: ").lower()
-            if choice in ['short', 's']:
-                return "short"
-            if choice in ['long', 'l']:
-                return "long"
-            else:
-                print("Invalid input. Please type 'short' or 's' fpr a short game, or 'long' or 'l' for a long game.")
-
     def play_game(self):
         print("Welcome to Decktionary Battle!")
         self.print_instructions() # Runs the print_instructions
         
         # Choose opponent type
-        self.choose_opponent()
+        self.choose_bot_difficulty()
 
-        # Choose game length
-        game_length = self.get_game_length()
-        
         self.deal_cards() # Deals out the initial 8 cards
         
         self.lead_suit = None
 
-        # Player 1 leads the first round
+        # Player leads the first round
         leader = 1
 
         while True: # Loops until the game ends
             for round_num in range(1,9): # Play 8 rounds
                 print(f"\n--- Round {round_num} ---")
                 print(f"Player {leader} is leading this round.")
-                player1_card, player2_card, winner = self.lead_round(leader, 2 if leader == 1 else 1)
+                player_card, bot_card, winner = self.lead_round(leader, 2 if leader == 1 else 1)
 
                 leader = winner
 
                 # Logs the round        
-                self.log_event(round_num, player1_card, player2_card, winner)
+                self.log_event(round_num, player_card, bot_card, winner)
                 
                 # Checks the game-ending criteria after each round
                 if self.check_game_end():
                     self.log_final_scores()
                     self.save_log_to_csv()
                     return
-            
-            if game_length == "short":
-                print("\n--- Short game completed ---")
-                self.log_final_scores()
-                self.save_log_to_csv()
-                break
-
+                
             # Deals new cards
             if len(self.deck) >= 16:
                 print("\n--- Dealing New Cards ---")
@@ -361,19 +269,19 @@ class DecktionaryBattle:
         # Checks if the game should end based off the set rules
 
         # If a player has shot the moon
-        if self.player1_score == 16 and self.player2_score == 0:
-            self.print_final_scores("Player 1 has shot the moon and wins with 17 points!")
+        if self.player_score == 16 and self.bot_score == 0:
+            self.print_final_scores("Player has shot the moon and wins with 17 points!")
             return True
-        if self.player2_score == 16 and self.player1_score == 0:
-            self.print_final_scores("Player 2 has shot the moon and wins with 17 points!")
+        if self.bot_score == 16 and self.player_score == 0:
+            self.print_final_scores("Bot has shot the moon and wins with 17 points!")
             return True
         
         # If a player is guaranteed to win
-        if self.player1_score >= 9 and self.player2_score >= 1:
-            self.print_final_scores("Player 1 is guaranteed to win. Ending game early.")
+        if self.player_score >= 9 and self.bot_score >= 1:
+            self.print_final_scores("Player is guaranteed to win. Ending game early.")
             return True
-        if self.player2_score >= 9 and self.player1_score >= 1:
-            self.print_final_scores("Player 2 is guaranteed to win. Ending game early.")
+        if self.bot_score >= 9 and self.player_score >= 1:
+            self.print_final_scores("Bot is guaranteed to win. Ending game early.")
             return True
         
         return False # Continues game if moon or guaranteed win criteria has not been met
@@ -382,13 +290,13 @@ class DecktionaryBattle:
         if message:
             print(f"\n{message}")
         print("\n--- Final Scores ---")
-        print("Player 1:", self.player1_score)
-        print("Player 2:", self.player2_score)
+        print("Player:", self.player_score)
+        print("Bot:", self.bot_score)
 
-        if self.player1_score > self.player2_score:
-            print("Player 1 wins the game!")
-        elif self.player2_score > self.player1_score:
-            print("Player 2 wins the game!")
+        if self.player_score > self.bot_score:
+            print("Player wins the game!")
+        elif self.bot_score > self.player_score:
+            print("Bot wins the game!")
         else:
             print("The game is a tie!")
         
