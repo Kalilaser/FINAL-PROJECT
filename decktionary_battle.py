@@ -1,6 +1,8 @@
 import random
 import csv
 import pandas as pd
+from datetime import datetime
+import time
 
 class DecktionaryBattle:
     def __init__(self):
@@ -107,11 +109,11 @@ class DecktionaryBattle:
     
     def lead_round(self, leader, follower):
         if leader == 1:
-            player_card = self.choose_card(self.player_hand, 1)
-            bot_card = self.choose_card(self.bot_hand, 2)
+            player_card = self.player_choose_card(self.player_hand, 1)
+            bot_card = self.bot_choose_card(self.bot_hand)
         else:
-            bot_card = self.choose_card(self.bot_hand, 2)
-            player_card = self.choose_card(self.player_hand, 1)
+            bot_card = self.bot_choose_card(self.bot_hand)
+            player_card = self.player_choose_card(self.player_hand, 1)
         
         # Determines the lead suit
         self.lead_suit = player_card[1] if leader == 1 else bot_card[1]
@@ -161,14 +163,15 @@ class DecktionaryBattle:
         """Returns the lead suit for the current round"""
         return self.lead_suit
 
-    def player_choose_card(self):
+    def player_choose_card(self, player_hand, player_num):
+        # Player card selection logic
         print("Your hand:")
         print(self.render_cards(self.player_hand))
         while True:
             try:
-                choice = int(input("Choose a card index (0-7): "))
-                if 0 <= choice < len(self.player_hand):
-                    return self.player_hand.pop(choice)
+                choice = int(input(f"Player {player_num}, choose a card index (0-{len(player_hand)-1}): "))
+                if 0 <= choice < len(player_hand):
+                    return player_hand.pop(choice)
                 print("Invalid choice. Try again.")
             except ValueError:
                 print("Enter a valid number.")
