@@ -1,8 +1,9 @@
 import random
 import csv
 import pandas as pd
-from datetime import datetime
 import time
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 class DecktionaryBattle:
     def __init__(self):
@@ -11,8 +12,9 @@ class DecktionaryBattle:
         self.player_score = 0
         self.bot_score = 0
         self.game_log = pd.DataFrame(columns=[
-            'Game', 'Round', 'Player Hand', 'Bot Hand', 'Player Card', 'Bot Card', 
-            'Winner', 'Player Score', 'Bot Score'
+            'Timestamp', 'Game', 'Round', 'Player Hand', 'Bot Hand', 
+            'Player Card', 'Bot Card', 'Winner', 
+            'Player Score', 'Bot Score', 'Bot Decision Time (s)'
         ])
         self.game_number = 1
         self.playing_against_bot = True
@@ -74,18 +76,20 @@ class DecktionaryBattle:
 
         return "\n".join(card_lines)
 
-    def log_event(self, round_num, player_card, bot_card, winner):
+    def log_event(self, round_num, player_card, bot_card, winner, bot_decision_time):
         # Events logged using Pandas
         self.game_log = pd.concat([self.game_log, pd.DataFrame([{
+            'Timestamp': time.strftime('%d-%m-%Y %H:%M:%S'),
             'Game': self.game_number,
             'Round': round_num,
-            'Player Hand': str(self.player_hand),
-            'Bot Hand': str(self.bot_hand),
+            'Player Hand': self.player_hand.copy(),
+            'Bot Hand': self.bot_hand.copy(),
             'Player Card': player_card,
             'Bot Card': bot_card,
             'Winner': f"Player {winner}",
             'Player Score': self.player_score,
-            'Bot Score': self.bot_score
+            'Bot Score': self.bot_score,
+            'Bot Decision Time (s)': bot_decision_time
         }])], ignore_index=True)
 
     def save_log_to_csv(self, filename="game_log.csv"):
@@ -94,7 +98,7 @@ class DecktionaryBattle:
         self.game_number += 1
 
     def log_final_scores(self):
-        # Logs the final scores and game summary to Data Frame
+        # Logs final scores and generates graphs.
         self.game_log = pd.concat([self.game_log, pd.DataFrame([{
             'Game': self.game_number,
             'Round': 'Final',
@@ -106,13 +110,19 @@ class DecktionaryBattle:
             'Player Score': self.player_score,
             'Bot Score': self.bot_score
         }])], ignore_index=True)
+
+        # Save the log to CSV
+        self.save_log_to_csv()
+
+        # Generate graphs
+        self.generate_graphs()
     
     def lead_round(self, leader, follower):
         if leader == 1:
             player_card = self.player_choose_card(self.player_hand, 1)
-            bot_card = self.bot_choose_card(self.bot_hand)
+            bot_card, bot_decision_time = self.bot_choose_card(self.bot_hand)
         else:
-            bot_card = self.bot_choose_card(self.bot_hand)
+            bot_card, bot_decision_time = self.bot_choose_card(self.bot_hand)
             player_card = self.player_choose_card(self.player_hand, 1)
         
         # Determines the lead suit
@@ -123,16 +133,16 @@ class DecktionaryBattle:
         print(self.render_cards(bot_card))
         print(f"Lead suit: {self.lead_suit}")
         
-        # Initilization of the winner variable
+        # Initialization of the winner variable
         winner = None
 
         # Follow Suit Rule Check: Checks to see if anyone did not follow the suit
         if follower == 2 and bot_card[1] != self.lead_suit and any(card[1] == self.lead_suit for card in self.bot_hand):
             print("Bot broke the rules by not following suit!")
-            winner = 1 # Player automatically wins
+            winner = 1  # Player automatically wins
         elif follower == 1 and player_card[1] != self.lead_suit and any(card[1] == self.lead_suit for card in self.player_hand):
             print("Player broke the rules by not following suit!")
-            winner = 2 # Bot automatically wins
+            winner = 2  # Bot automatically wins
             
         if winner is None:   
             # Determines the winner normally if no rules have been broken
@@ -157,10 +167,11 @@ class DecktionaryBattle:
         print("Revealed Card:")
         print(self.render_cards(revealed_card))
         
-        return player_card, bot_card, winner
+        # Return player_card, bot_card, and winner
+        return player_card, bot_card, winner, bot_decision_time
     
     def get_lead_suit(self):
-        """Returns the lead suit for the current round"""
+        # Returns the lead suit for the current round
         return self.lead_suit
 
     def player_choose_card(self, player_hand, player_num):
@@ -177,12 +188,15 @@ class DecktionaryBattle:
                 print("Enter a valid number.")
 
     def bot_choose_card(self, bot_hand):
-        """Logic for the bot to choose a card base on the difficulty."""
-        print("Bot is choosing a card...")
+        start_time = time.time()  # Start timing
         if self.bot_difficulty == "easy":
-            return self.bot_easy_choice(bot_hand)
+            card = self.bot_easy_choice(bot_hand)
         elif self.bot_difficulty == "expert":
-            return self.bot_expert_choice(bot_hand)
+            card = self.bot_expert_choice(bot_hand)
+        end_time = time.time()  # End timing
+        bot_decision_time = round(end_time - start_time, 3)
+        print(f"Bot decision time: {bot_decision_time} seconds")
+        return card, bot_decision_time  # Ensure both values are returned for logging
 
     def bot_easy_choice(self, bot_hand):
         # Logic for easy bot (picks random card)
@@ -227,45 +241,45 @@ class DecktionaryBattle:
     
     def play_game(self):
         print("Welcome to Decktionary Battle!")
-        self.print_instructions() # Runs the print_instructions
+        self.print_instructions()  # Display instructions
         
-        # Choose opponent type
-        self.choose_bot_difficulty()
-
-        self.deal_cards() # Deals out the initial 8 cards
+        self.choose_bot_difficulty()  # Choose bot difficulty
+        self.deal_cards()  # Initial deal of cards
         
         self.lead_suit = None
-
-        # Player leads the first round
-        leader = 1
-
-        while True: # Loops until the game ends
-            for round_num in range(1,9): # Play 8 rounds
+        leader = 1  # Player starts as the leader
+        
+        while True:  # Loop until the game ends
+            for round_num in range(1, 9):  # Play 8 rounds per hand
                 print(f"\n--- Round {round_num} ---")
                 print(f"Player {leader} is leading this round.")
-                player_card, bot_card, winner = self.lead_round(leader, 2 if leader == 1 else 1)
-
-                leader = winner
-
-                # Logs the round        
-                self.log_event(round_num, player_card, bot_card, winner)
                 
-                # Checks the game-ending criteria after each round
+                # Call lead_round to handle the round logic
+                player_card, bot_card, winner, bot_decision_time = self.lead_round(leader, 2 if leader == 1 else 1)
+                
+                # Update leader based on the round winner
+                leader = winner
+                
+                # Log the event (including bot decision timing from lead_round)
+                self.log_event(round_num, player_card, bot_card, winner, bot_decision_time)
+                
+                # Check if game-ending criteria are met
                 if self.check_game_end():
                     self.log_final_scores()
                     self.save_log_to_csv()
                     return
-                
-            # Deals new cards
+            
+            # Deal new cards if enough cards remain in the deck
             if len(self.deck) >= 16:
                 print("\n--- Dealing New Cards ---")
                 self.deal_cards()
             else:
                 print("\nNot enough cards to deal. Game over.")
                 self.log_final_scores()
-                self.save_log_to_csv()               
+                self.save_log_to_csv()
                 break
-        
+
+        # Print final scores at the end of the game
         self.print_final_scores()
     
     def check_game_end(self):
@@ -302,7 +316,53 @@ class DecktionaryBattle:
             print("Bot wins the game!")
         else:
             print("The game is a tie!")
-        
+    
+    def generate_graphs(self):
+        # Generates and display graphs based on the game log.
+        if self.game_log.empty:
+            print("No game data to visualize!")
+            return
+
+        # Rounds Won vs. Lost
+        rounds_won = len(self.game_log[self.game_log['Winner'] == 'Player 1'])
+        rounds_lost = len(self.game_log[self.game_log['Winner'] == 'Player 2'])
+        rounds_data = [rounds_won, rounds_lost]
+        rounds_labels = ['Rounds Won', 'Rounds Lost']
+
+        # Pie Chart
+        plt.figure(figsize=(6, 6))
+        plt.pie(rounds_data, labels=rounds_labels, autopct='%1.1f%%', startangle=90)
+        plt.title("Rounds Won vs. Lost")
+        plt.show()
+
+        # Probability of Winning Per Round
+        self.game_log['Winning Probability (%)'] = self.game_log.apply(
+            lambda row: self.calculate_probability(row['Player Card'], row['Bot Hand']), axis=1
+        )
+
+        plt.figure(figsize=(10, 6))
+        sns.lineplot(data=self.game_log, x='Round', y='Winning Probability (%)', marker='o')
+        plt.title("Winning Probability Per Round")
+        plt.xlabel("Round")
+        plt.ylabel("Winning Probability (%)")
+        plt.xticks(range(1, len(self.game_log) + 1))
+        plt.show()
+
+    def calculate_probability(self, player_card, bot_hand):
+        # Calculates the probability of winning for the player's card.
+        if not isinstance(bot_hand, list):
+            bot_hand = eval(bot_hand)  # Parse the list from its string representation
+        if not isinstance(player_card, tuple):
+            player_card = eval(player_card)  # Parse the tuple from its string representation
+
+        if not player_card or not bot_hand:
+            return 0
+
+        player_rank = player_card[0]
+        higher_cards = [card for card in bot_hand if card[0] > player_rank and card[1] == player_card[1]]
+
+        probability = 1 - (len(higher_cards) / len(bot_hand)) if bot_hand else 0
+        return round(probability * 100, 2)       
 
 game = DecktionaryBattle()
 game.play_game()
