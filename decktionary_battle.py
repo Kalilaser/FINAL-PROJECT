@@ -82,10 +82,10 @@ class DecktionaryBattle:
             'Timestamp': time.strftime('%d-%m-%Y %H:%M:%S'),
             'Game': self.game_number,
             'Round': round_num,
-            'Player Hand': self.player_hand.copy(),
-            'Bot Hand': self.bot_hand.copy(),
-            'Player Card': player_card,
-            'Bot Card': bot_card,
+            'Player Hand': repr(self.player_hand),
+            'Bot Hand': repr(self.bot_hand),
+            'Player Card': repr(player_card),
+            'Bot Card': repr(bot_card),
             'Winner': f"Player {winner}",
             'Player Score': self.player_score,
             'Bot Score': self.bot_score,
@@ -93,13 +93,17 @@ class DecktionaryBattle:
         }])], ignore_index=True)
 
     def save_log_to_csv(self, filename="game_log.csv"):
-        # Saves Data frame to CSV file
+        # Deduplicate data before saving
+        self.game_log = self.game_log.drop_duplicates(subset=['Timestamp', 'Game', 'Round'], keep='first')
+
+        # Save DataFrame to CSV
         self.game_log.to_csv(filename, index=False, mode='a', header=not pd.io.common.file_exists(filename))
-        self.game_number += 1
+        print(f"Game log saved to {filename} successfully.")
 
     def log_final_scores(self):
         # Logs final scores and generates graphs.
-        self.game_log = pd.concat([self.game_log, pd.DataFrame([{
+        final_log = pd.DataFrame([{
+            'Timestamp': time.strftime('%d-%m-%Y %H:%M:%S'),
             'Game': self.game_number,
             'Round': 'Final',
             'Player Hand': str(self.player_hand),
@@ -108,10 +112,15 @@ class DecktionaryBattle:
             'Bot Card': '',
             'Winner': 'Game Over',
             'Player Score': self.player_score,
-            'Bot Score': self.bot_score
-        }])], ignore_index=True)
+            'Bot Score': self.bot_score,
+            'Bot Decision Time (s)': ''
+        }])
 
-        # Save the log to CSV
+        # Concatenate the final log and deduplicate
+        self.game_log = pd.concat([self.game_log, final_log], ignore_index=True)
+        self.game_log = self.game_log.drop_duplicates(subset=['Timestamp', 'Game', 'Round'], keep='first')
+
+        # Save to CSV
         self.save_log_to_csv()
 
         # Generate graphs
@@ -335,34 +344,48 @@ class DecktionaryBattle:
         plt.title("Rounds Won vs. Lost")
         plt.show()
 
+        # Filter numeric rounds for graph
+        self.game_log['Round'] = pd.to_numeric(self.game_log['Round'], errors='coerce')
+        graph_data = self.game_log.dropna(subset=['Round'])  # Drop rows with NaN in 'Round'
+
         # Probability of Winning Per Round
-        self.game_log['Winning Probability (%)'] = self.game_log.apply(
+        graph_data['Winning Probability (%)'] = graph_data.apply(
             lambda row: self.calculate_probability(row['Player Card'], row['Bot Hand']), axis=1
         )
 
         plt.figure(figsize=(10, 6))
-        sns.lineplot(data=self.game_log, x='Round', y='Winning Probability (%)', marker='o')
+        sns.lineplot(data=graph_data, x='Round', y='Winning Probability (%)', marker='o')
         plt.title("Winning Probability Per Round")
         plt.xlabel("Round")
         plt.ylabel("Winning Probability (%)")
-        plt.xticks(range(1, len(self.game_log) + 1))
+        plt.xticks(range(1, len(graph_data) + 1))
         plt.show()
 
     def calculate_probability(self, player_card, bot_hand):
         # Calculates the probability of winning for the player's card.
-        if not isinstance(bot_hand, list):
-            bot_hand = eval(bot_hand)  # Parse the list from its string representation
-        if not isinstance(player_card, tuple):
-            player_card = eval(player_card)  # Parse the tuple from its string representation
+        try:
+            if isinstance(bot_hand, str):
+                bot_hand = eval(bot_hand)  # Parse the list from string
+            if isinstance(player_card, str):
+                player_card = eval(player_card)  # Parse the tuple from string
+        except (SyntaxError, NameError, ValueError) as e:
+            print(f"Error parsing card data: {e}, Player Card: {player_card}, Bot Hand: {bot_hand}")
+            return 0  # Default to 0 probability on parsing error
+
+        if not isinstance(player_card, tuple) or not isinstance(bot_hand, list):
+            print("Invalid data format for player_card or bot_hand.")
+            return 0
 
         if not player_card or not bot_hand:
             return 0
 
         player_rank = player_card[0]
-        higher_cards = [card for card in bot_hand if card[0] > player_rank and card[1] == player_card[1]]
+        player_suit = player_card[1]
+
+        higher_cards = [card for card in bot_hand if card[0] > player_rank and card[1] == player_suit]
 
         probability = 1 - (len(higher_cards) / len(bot_hand)) if bot_hand else 0
-        return round(probability * 100, 2)       
+        return round(probability * 100, 2)      
 
 game = DecktionaryBattle()
 game.play_game()
